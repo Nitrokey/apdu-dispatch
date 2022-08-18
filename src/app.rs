@@ -16,4 +16,11 @@ pub trait App<const C: usize, const R: usize>: iso7816::App {
     /// Write response data back to buf, and return length of payload.  Return APDU Error code on error.
     fn call(&mut self, interface: Interface, apdu: &Command<C>, reply: &mut Data<R>) -> Result;
 
+    /// Peek the APDU data and see, if this is the right application to be called.
+    /// Handy for having multiple applications attached to the same transport.
+    /// Return true if the application recognizes it's addressed to it. False otherwise.
+    /// Returns true by default for backward compatibility.
+    fn peek(&self, _apdu: Option<&Command<C>>) -> bool {
+        true
+    }
 }
