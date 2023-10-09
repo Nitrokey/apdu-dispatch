@@ -283,10 +283,11 @@ impl<'pipe> ApduDispatch<'pipe> {
         // reply 61XX, and put the response in a buffer.
         // It is up to the reader to then send GetResponse
         // requests, to which we will return up to `Le` bytes at a time.
-        let (new_state, response) = match &mut self.buffer.raw {
+        match &mut self.buffer.raw {
             RawApduBuffer::Request(_) | RawApduBuffer::None => {
                 info!("Unexpected GetResponse request.");
-                (RawApduBuffer::None, Status::UnspecifiedCheckingError.into())
+                self.buffer.raw = RawApduBuffer::None;
+                self.respond(Status::UnspecifiedCheckingError.into());
             }
             RawApduBuffer::Response(res) => {
                 let max_response_len = self.response_len_expected.min(MAX_INTERCHANGE_DATA);
@@ -295,13 +296,13 @@ impl<'pipe> ApduDispatch<'pipe> {
                     let boundary = max_response_len.min(res.len());
 
                     let to_send = &res[..boundary];
-                    let remaining = &res[boundary..];
+                    let remaining = res.len() - boundary;
                     let mut message = interchanges::Data::from_slice(to_send).unwrap();
-                    let return_code = if remaining.len() > 255 {
+                    let return_code = if remaining > 255 {
                         // XX = 00 indicates more than 255 bytes of data
                         0x6100u16
-                    } else if !remaining.is_empty() {
-                        0x6100 + (remaining.len() as u16)
+                    } else if remaining > 0 {
+                        0x6100 + (remaining as u16)
                     } else {
                         // Last chunk has success code
                         0x9000
@@ -310,27 +311,25 @@ impl<'pipe> ApduDispatch<'pipe> {
                         .extend_from_slice(&return_code.to_be_bytes())
                         .expect("Failed add to status bytes");
                     if return_code == 0x9000 {
-                        (RawApduBuffer::None, message)
+                        self.buffer.raw = RawApduBuffer::None;
+                        self.respond(message);
                     } else {
                         info!("Still {} bytes in response buffer", remaining.len());
-                        (
-                            RawApduBuffer::Response(response::Data::from_slice(remaining).unwrap()),
-                            message,
-                        )
+                        res.copy_within(boundary.., 0);
+                        res.truncate(remaining);
+                        self.respond(message);
                     }
                 } else {
                     // Add success code
                     res.extend_from_slice(&[0x90, 00])
                         .expect("Failed to add the status bytes");
-                    (
-                        RawApduBuffer::None,
-                        interchanges::Data::from_slice(res.as_slice()).unwrap(),
-                    )
+                    let mut data = interchanges::Data::new();
+                    data.extend_from_slice(res).unwrap();
+                    self.buffer.raw = RawApduBuffer::None;
+                    self.respond(data);
                 }
             }
         };
-        self.buffer.raw = new_state;
-        self.respond(response);
     }
 
     #[inline(never)]
