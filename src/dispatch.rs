@@ -297,7 +297,8 @@ impl<'pipe> ApduDispatch<'pipe> {
 
                     let to_send = &res[..boundary];
                     let remaining = res.len() - boundary;
-                    let mut message = interchanges::Data::from_slice(to_send).unwrap();
+                    let mut message = interchanges::Data::new();
+                    message.extend_from_slice(to_send).unwrap();
                     let return_code = if remaining > 255 {
                         // XX = 00 indicates more than 255 bytes of data
                         0x6100u16
