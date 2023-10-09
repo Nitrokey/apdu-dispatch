@@ -52,18 +52,18 @@ struct ApduBuffer {
 
 impl ApduBuffer {
     fn request<const S: usize>(&mut self, command: &iso7816::Command<S>) {
-        match &mut self.raw {
-            RawApduBuffer::Request(buffered) => {
-                buffered.extend_from_command(command).ok();
-            }
-            _ => {
-                if self.raw != RawApduBuffer::None {
-                    info!("Was buffering the last response, but aborting that now for this new request.");
-                }
-                let mut new_cmd = iso7816::Command::try_from(&[0, 0, 0, 0]).unwrap();
-                new_cmd.extend_from_command(command).ok();
-                self.raw = RawApduBuffer::Request(new_cmd);
-            }
+        if self.raw != RawApduBuffer::None {
+            info!("Was buffering the last response, but aborting that now for this new request.");
+        }
+        // We use this somewhat awkward way of placing the command into the buffer to reduce the
+        // stack usage.
+        if !matches!(&self.raw, RawApduBuffer::Request(_)) {
+            self.raw = RawApduBuffer::Request(iso7816::Command::try_from(&[0, 0, 0, 0]).unwrap());
+        }
+        if let RawApduBuffer::Request(buffered) = &mut self.raw {
+            buffered.extend_from_command(command).ok();
+        } else {
+            panic!("programming error -- self.raw is not a Request");
         }
     }
 
