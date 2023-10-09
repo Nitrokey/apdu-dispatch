@@ -235,16 +235,16 @@ impl<'pipe> ApduDispatch<'pipe> {
     fn check_for_request(&mut self) -> RequestType {
         if !self.busy() {
             // Check to see if we have gotten a message, giving priority to contactless.
-            let (message, interface) = if let Some(message) = self.contactless.take_request() {
+            let (message, interface) = if let Ok(message) = self.contactless.request() {
                 (message, Interface::Contactless)
-            } else if let Some(message) = self.contact.take_request() {
+            } else if let Ok(message) = self.contact.request() {
                 (message, Interface::Contact)
             } else {
                 return RequestType::None;
             };
 
             // Parse the message as an APDU.
-            match Self::parse_apdu::<{ interchanges::SIZE }>(&message) {
+            match Self::parse_apdu::<{ interchanges::SIZE }>(message) {
                 Ok(command) => {
                     self.response_len_expected = command.expected();
                     // The Apdu may be standalone or part of a chain.
