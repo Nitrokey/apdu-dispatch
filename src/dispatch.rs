@@ -15,7 +15,6 @@ use crate::{
     interchanges::{self, Responder},
     response, Command,
 };
-use core::convert::TryInto;
 
 use iso7816::{command::FromSliceError, Aid, Instruction, Result, Status};
 
@@ -182,12 +181,12 @@ impl<'pipe> ApduDispatch<'pipe> {
                 // acknowledge
                 Interface::Contact => {
                     self.contact
-                        .respond(Status::Success.try_into().unwrap())
+                        .respond(Status::Success.into())
                         .expect("Could not respond");
                 }
                 Interface::Contactless => {
                     self.contactless
-                        .respond(Status::Success.try_into().unwrap())
+                        .respond(Status::Success.into())
                         .expect("Could not respond");
                 }
             }
@@ -397,9 +396,8 @@ impl<'pipe> ApduDispatch<'pipe> {
                 RawApduBuffer::Request(apdu) => app.select(interface, apdu, &mut response),
                 _ => panic!("Unexpected buffer state."),
             };
-            if result.is_ok() {
-                self.current_aid = Some(aid);
-            }
+
+            self.current_aid = Some(aid);
 
             self.handle_app_response(&result, &response);
         } else {
